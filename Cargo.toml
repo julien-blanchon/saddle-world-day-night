@@ -8,7 +8,7 @@ license = "MIT-0"
 description = "Time-of-day and outdoor lighting orchestration for Bevy"
 
 [dependencies]
-bevy = "0.18"
+bevy = { version = "0.18", features = ["webgpu"] }
 
 [workspace]
 

@@ -11,7 +11,7 @@ members = [
 resolver = "3"
 
 [workspace.dependencies]
-bevy = "0.18"
+bevy = { version = "0.18", features = ["webgpu"] }
 saddle-world-day-night = { path = ".." }
 
 [workspace.lints.clippy]
