@@ -262,7 +262,10 @@ fn record_dawn(
     }
 }
 
-fn record_day(mut phase_log: ResMut<PhaseLog>, mut messages: MessageReader<saddle_world_day_night::DayStarted>) {
+fn record_day(
+    mut phase_log: ResMut<PhaseLog>,
+    mut messages: MessageReader<saddle_world_day_night::DayStarted>,
+) {
     let count = messages.read().count() as u32;
     if count > 0 {
         phase_log.day_count += count;

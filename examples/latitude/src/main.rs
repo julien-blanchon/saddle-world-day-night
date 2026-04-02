@@ -1,7 +1,9 @@
 use saddle_world_day_night_example_support as support;
 
 use bevy::prelude::*;
-use saddle_world_day_night::{CelestialModel, DayNightConfig, DayNightPlugin, DayNightSystems, SeasonSettings};
+use saddle_world_day_night::{
+    CelestialModel, DayNightConfig, DayNightPlugin, DayNightSystems, SeasonSettings,
+};
 
 fn main() {
     let mut app = App::new();
