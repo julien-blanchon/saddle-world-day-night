@@ -22,6 +22,7 @@ pub(crate) struct DayNightRuntimeState {
     pub initialized: bool,
     pub lighting_initialized: bool,
     pub last_step: Option<TimeStep>,
+    pub last_announced_step: Option<(f64, f64, TimeStepMode)>,
     pub spawned_sun: Option<Entity>,
     pub spawned_moon: Option<Entity>,
 }
@@ -34,6 +35,7 @@ pub(crate) fn activate_runtime(
     mut lighting: ResMut<DayNightLighting>,
 ) {
     runtime.active = true;
+    runtime.last_announced_step = None;
     if !runtime.initialized {
         *time_of_day = initial_time_from_config(&config);
         runtime.initialized = true;
@@ -68,6 +70,7 @@ pub(crate) fn deactivate_runtime(
     mut runtime: ResMut<DayNightRuntimeState>,
 ) {
     runtime.active = false;
+    runtime.last_announced_step = None;
 
     if let Some(entity) = runtime.spawned_sun.take() {
         commands.entity(entity).despawn();
@@ -206,7 +209,7 @@ pub(crate) fn resolve_lighting_state(
 
 pub(crate) fn detect_phase_transitions(
     config: Res<DayNightConfig>,
-    runtime: Res<DayNightRuntimeState>,
+    mut runtime: ResMut<DayNightRuntimeState>,
     mut diagnostics: ResMut<DayNightDiagnostics>,
     mut dawn_started: MessageWriter<DawnStarted>,
     mut day_started: MessageWriter<DayStarted>,
@@ -222,6 +225,16 @@ pub(crate) fn detect_phase_transitions(
     if step.mode == TimeStepMode::Idle {
         return;
     }
+
+    let current_step = (
+        step.previous_absolute_hours(),
+        step.current_absolute_hours(),
+        step.mode,
+    );
+    if runtime.last_announced_step == Some(current_step) {
+        return;
+    }
+    runtime.last_announced_step = Some(current_step);
 
     let phases = config.phase_boundaries.phases_started_between(
         step.previous_absolute_hours(),

@@ -8,6 +8,10 @@ publish = false
 bevy = { workspace = true }
 saddle-world-day-night = { workspace = true }
 saddle-world-day-night-example-support = { path = "../support" }
+saddle-world-sky = { git = "https://github.com/julien-blanchon/saddle-world-sky" }
+saddle-world-weather = { git = "https://github.com/julien-blanchon/saddle-world-weather" }
+height_fog = { git = "https://github.com/julien-blanchon/saddle-rendering-height-fog", package = "saddle-rendering-height-fog" }
+saddle-pane = { workspace = true }
 
 [lints]
 workspace = true

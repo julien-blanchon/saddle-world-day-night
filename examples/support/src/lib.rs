@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use saddle_pane::prelude::*;
 use saddle_world_day_night::{
-    CelestialState, DayNightCamera, DayNightDiagnostics, DayNightLighting, Moon, Sun, TimeOfDay,
+    CelestialState, DayNightCamera, DayNightConfig, DayNightDiagnostics, DayNightLighting, Moon,
+    Sun, TimeOfDay, WeatherModulation,
 };
 
 #[derive(Component)]
@@ -11,6 +13,67 @@ pub struct ShowcaseSpinner {
 
 #[derive(Component)]
 pub struct ShowcaseOverlay;
+
+#[derive(Resource, Clone, Default, Pane)]
+#[pane(title = "Day Night Controls", position = "top-right")]
+pub struct DayNightDemoPane {
+    #[pane]
+    pub paused: bool,
+    #[pane(slider, min = 0.0, max = 24.0, step = 0.1)]
+    pub time_hours: f32,
+    #[pane(slider, min = 0.25, max = 8.0, step = 0.05)]
+    pub seconds_per_hour: f32,
+    #[pane(slider, min = 0.0, max = 8.0, step = 0.05)]
+    pub time_scale: f32,
+    #[pane(slider, min = 0.0, max = 1.0, step = 0.01)]
+    pub cloud_cover: f32,
+    #[pane(slider, min = 0.0, max = 1.0, step = 0.01)]
+    pub haze: f32,
+    #[pane(slider, min = 0.0, max = 1.0, step = 0.01)]
+    pub precipitation_dimming: f32,
+    #[pane(monitor)]
+    pub sun_lux: f32,
+    #[pane(monitor)]
+    pub fog_visibility: f32,
+    #[pane(monitor)]
+    pub star_visibility: f32,
+}
+
+impl DayNightDemoPane {
+    pub fn from_config(config: &DayNightConfig) -> Self {
+        Self {
+            paused: config.paused,
+            time_hours: config.initial_time,
+            seconds_per_hour: config.seconds_per_hour,
+            time_scale: config.time_scale,
+            cloud_cover: 0.0,
+            haze: 0.0,
+            precipitation_dimming: 0.0,
+            sun_lux: 0.0,
+            fog_visibility: 0.0,
+            star_visibility: 0.0,
+        }
+    }
+}
+
+pub fn install_demo_pane(app: &mut App, config: &DayNightConfig) {
+    app.insert_resource(DayNightDemoPane::from_config(config));
+    app.add_plugins((
+        bevy_flair::FlairPlugin,
+        bevy_input_focus::InputDispatchPlugin,
+        bevy_ui_widgets::UiWidgetsPlugins,
+        bevy_input_focus::tab_navigation::TabNavigationPlugin,
+        PanePlugin,
+    ))
+    .register_pane::<DayNightDemoPane>();
+    app.add_systems(
+        Update,
+        (
+            sync_demo_pane.before(saddle_world_day_night::DayNightSystems::AdvanceTime),
+            sync_demo_monitors.after(saddle_world_day_night::DayNightSystems::ResolveLighting),
+        ),
+    );
+}
 
 pub fn spawn_outdoor_showcase(
     commands: &mut Commands,
@@ -164,4 +227,57 @@ pub fn update_overlay(
         lighting.star_visibility,
         diagnostics.phase_message_count,
     );
+}
+
+fn sync_demo_pane(
+    pane: Res<DayNightDemoPane>,
+    mut config: ResMut<DayNightConfig>,
+    mut time_of_day: ResMut<TimeOfDay>,
+    mut weather: ResMut<WeatherModulation>,
+) {
+    let desired_seconds_per_hour = pane.seconds_per_hour.max(0.01);
+    let desired_time_scale = pane.time_scale.max(0.0);
+    let desired_cloud_cover = pane.cloud_cover.clamp(0.0, 1.0);
+    let desired_haze = pane.haze.clamp(0.0, 1.0);
+    let desired_precipitation_dimming = pane.precipitation_dimming.clamp(0.0, 1.0);
+
+    if config.paused != pane.paused {
+        config.paused = pane.paused;
+    }
+    if (config.seconds_per_hour - desired_seconds_per_hour).abs() > f32::EPSILON {
+        config.seconds_per_hour = desired_seconds_per_hour;
+    }
+    if (config.time_scale - desired_time_scale).abs() > f32::EPSILON {
+        config.time_scale = desired_time_scale;
+    }
+    if (config.initial_time - pane.time_hours).abs() > 0.01 {
+        config.initial_time = pane.time_hours;
+    }
+    if (time_of_day.hour - pane.time_hours).abs() > 0.01 {
+        time_of_day.set_hour(pane.time_hours);
+    }
+    if (weather.cloud_cover - desired_cloud_cover).abs() > f32::EPSILON {
+        weather.cloud_cover = desired_cloud_cover;
+    }
+    if (weather.haze - desired_haze).abs() > f32::EPSILON {
+        weather.haze = desired_haze;
+    }
+    if (weather.precipitation_dimming - desired_precipitation_dimming).abs() > f32::EPSILON {
+        weather.precipitation_dimming = desired_precipitation_dimming;
+    }
+}
+
+fn sync_demo_monitors(
+    time_of_day: Res<TimeOfDay>,
+    lighting: Res<DayNightLighting>,
+    weather: Res<WeatherModulation>,
+    mut pane: ResMut<DayNightDemoPane>,
+) {
+    pane.time_hours = time_of_day.hour;
+    pane.sun_lux = lighting.sun_illuminance_lux;
+    pane.fog_visibility = lighting.fog_visibility;
+    pane.star_visibility = lighting.star_visibility;
+    pane.cloud_cover = weather.cloud_cover;
+    pane.haze = weather.haze;
+    pane.precipitation_dimming = weather.precipitation_dimming;
 }

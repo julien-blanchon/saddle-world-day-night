@@ -4,6 +4,11 @@ use bevy::prelude::*;
 use saddle_world_day_night::{DayNightConfig, DayNightPlugin};
 
 fn main() {
+    let config = DayNightConfig {
+        initial_time: 7.5,
+        seconds_per_hour: 2.0,
+        ..default()
+    };
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
@@ -13,11 +18,8 @@ fn main() {
         }),
         ..default()
     }));
-    app.add_plugins(DayNightPlugin::default().with_config(DayNightConfig {
-        initial_time: 7.5,
-        seconds_per_hour: 2.0,
-        ..default()
-    }));
+    support::install_demo_pane(&mut app, &config);
+    app.add_plugins(DayNightPlugin::default().with_config(config));
     app.add_systems(Startup, setup);
     app.add_systems(Update, (support::spin_showcase, support::update_overlay));
     app.run();

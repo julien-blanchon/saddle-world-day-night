@@ -8,6 +8,7 @@ publish = false
 bevy = { workspace = true }
 saddle-world-day-night = { workspace = true }
 saddle-world-day-night-example-support = { path = "../support" }
+saddle-pane = { workspace = true }
 
 [lints]
 workspace = true

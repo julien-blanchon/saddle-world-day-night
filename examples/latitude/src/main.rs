@@ -6,16 +6,7 @@ use saddle_world_day_night::{
 };
 
 fn main() {
-    let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "day_night latitude".into(),
-            resolution: (1440, 810).into(),
-            ..default()
-        }),
-        ..default()
-    }));
-    app.add_plugins(DayNightPlugin::default().with_config(DayNightConfig {
+    let config = DayNightConfig {
         initial_time: 4.5,
         seconds_per_hour: 1.0,
         celestial: saddle_world_day_night::CelestialSettings {
@@ -29,7 +20,18 @@ fn main() {
             ..default()
         },
         ..default()
+    };
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "day_night latitude".into(),
+            resolution: (1440, 810).into(),
+            ..default()
+        }),
+        ..default()
     }));
+    support::install_demo_pane(&mut app, &config);
+    app.add_plugins(DayNightPlugin::default().with_config(config));
     app.add_systems(Startup, setup);
     app.add_systems(
         Update,

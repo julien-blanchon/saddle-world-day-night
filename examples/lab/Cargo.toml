@@ -12,8 +12,10 @@ e2e = ["dep:saddle-bevy-e2e"]
 [dependencies]
 bevy = "0.18"
 saddle-world-day-night = { workspace = true }
+saddle-world-day-night-example-support = { path = "../support" }
 bevy_brp_extras = { version = "0.19", optional = true }
 saddle-bevy-e2e = { git = "https://github.com/julien-blanchon/saddle-bevy-e2e", features = ["json"], optional = true }
+saddle-pane = { workspace = true }
 
 [lints]
 workspace = true

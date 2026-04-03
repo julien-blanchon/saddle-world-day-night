@@ -29,7 +29,14 @@ pub fn scenario_by_name(name: &str) -> Option<Scenario> {
 fn day_night_smoke() -> Scenario {
     Scenario::builder("day_night_smoke")
         .description("Boot the lab, verify resources and managed entities exist, then capture a readable dawn checkpoint.")
-        .then(Action::WaitFrames(60))
+        .then(Action::WaitUntil {
+            label: "dawn checkpoint".into(),
+            condition: Box::new(|world| {
+                let diagnostics = world.resource::<saddle_world_day_night::DayNightDiagnostics>();
+                diagnostics.current_phase == DayPhase::Dawn && diagnostics.current_time >= 5.5
+            }),
+            max_frames: 90,
+        })
         .then(Action::Custom(Box::new(|world| {
             assert!(world.contains_resource::<saddle_world_day_night::TimeOfDay>());
             assert!(world.contains_resource::<saddle_world_day_night::CelestialState>());

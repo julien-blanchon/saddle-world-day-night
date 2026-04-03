@@ -2,6 +2,7 @@
 mod e2e;
 #[cfg(feature = "e2e")]
 mod scenarios;
+use saddle_world_day_night_example_support as support;
 
 use bevy::{
     camera::Exposure, core_pipeline::tonemapping::Tonemapping, post_process::bloom::Bloom,
@@ -57,7 +58,9 @@ fn main() {
     #[cfg(feature = "e2e")]
     app.add_plugins(e2e::E2EPlugin);
 
-    app.add_plugins(DayNightPlugin::default().with_config(lab_config()));
+    let config = lab_config();
+    support::install_demo_pane(&mut app, &config);
+    app.add_plugins(DayNightPlugin::default().with_config(config));
     app.add_systems(Startup, setup);
     app.add_systems(
         Update,
