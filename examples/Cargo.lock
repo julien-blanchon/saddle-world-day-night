@@ -4965,31 +4965,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "saddle-rendering-height-fog"
-version = "0.1.0"
-source = "git+https://github.com/julien-blanchon/saddle-rendering-height-fog#922d4ba1198101d16b145cbe6333ff4214a8fb5b"
-dependencies = [
- "bevy",
-]
-
-[[package]]
 name = "saddle-world-day-night"
 version = "0.1.0"
 dependencies = [
  "bevy",
-]
-
-[[package]]
-name = "saddle-world-day-night-example-atmosphere"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "saddle-pane",
- "saddle-rendering-height-fog",
- "saddle-world-day-night",
- "saddle-world-day-night-example-support",
- "saddle-world-sky",
- "saddle-world-weather",
 ]
 
 [[package]]
@@ -5054,22 +5033,6 @@ dependencies = [
  "saddle-pane",
  "saddle-world-day-night",
  "saddle-world-day-night-example-support",
-]
-
-[[package]]
-name = "saddle-world-sky"
-version = "0.1.0"
-source = "git+https://github.com/julien-blanchon/saddle-world-sky#180802c437a4d481bbbcb04294d82d8495b71622"
-dependencies = [
- "bevy",
-]
-
-[[package]]
-name = "saddle-world-weather"
-version = "0.1.0"
-source = "git+https://github.com/julien-blanchon/saddle-world-weather#38eb06070cdb8598299619102400bb0fe372cf1d"
-dependencies = [
- "bevy",
 ]
 
 [[package]]

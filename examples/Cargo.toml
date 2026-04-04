@@ -4,7 +4,6 @@ members = [
     "basic",
     "full_cycle",
     "latitude",
-    "atmosphere",
     "fixed_time",
     "lab",
 ]
