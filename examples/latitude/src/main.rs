@@ -55,4 +55,10 @@ fn setup(
         saddle_world_day_night::DayNightCamera::default(),
         true,
     );
+    support::spawn_instructions(
+        &mut commands,
+        "Latitude Demo — 62° latitude, season 0.25 (spring)\n\
+         Earth-like sun path: shorter/longer days depending on season.\n\
+         Use the pane (top-right) to adjust speed and explore the cycle.",
+    );
 }

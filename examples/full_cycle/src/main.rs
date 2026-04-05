@@ -41,4 +41,10 @@ fn setup(
         saddle_world_day_night::DayNightCamera::default(),
         true,
     );
+    support::spawn_instructions(
+        &mut commands,
+        "Full Cycle Demo — fast 24h cycle (0.75 sec/hour)\n\
+         Watch the complete dawn → day → dusk → night cycle.\n\
+         Use the pane (top-right) to pause, scrub, or adjust speed.",
+    );
 }

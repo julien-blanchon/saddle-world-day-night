@@ -5012,6 +5012,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "saddle-world-day-night-example-street-lights"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-world-day-night",
+ "saddle-world-day-night-example-support",
+]
+
+[[package]]
 name = "saddle-world-day-night-example-support"
 version = "0.1.0"
 dependencies = [

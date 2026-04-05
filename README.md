@@ -83,7 +83,7 @@ For examples and labs, `DayNightPlugin::default()` is the always-on entrypoint. 
 | Type | Purpose |
 | --- | --- |
 | `DayNightPlugin` | Registers the runtime with injectable activate, deactivate, and update schedules |
-| `DayNightSystems` | Public ordering hooks: `AdvanceTime`, `ResolveCelestial`, `ResolveLighting`, `DetectPhaseTransitions`, `ApplyLighting` |
+| `DayNightSystems` | Public ordering hooks: `AdvanceTime`, `ResolveCelestial`, `ResolveLighting`, `DetectPhaseTransitions`, `ApplyLighting`, `UpdateTimeReactive` |
 | `DayNightConfig` | Top-level runtime configuration |
 | `TimeOfDay` | Current hour plus completed-cycle counter |
 | `TimeOverride`, `TimeStep`, `TimeStepMode`, `TimeWrapMode` | Clock-control and timing helpers |
@@ -92,6 +92,7 @@ For examples and labs, `DayNightPlugin::default()` is the always-on entrypoint. 
 | `CelestialState`, `MoonPhase` | Resolved read-only celestial output |
 | `LightingProfile`, `WeatherModulation`, `DayNightLighting`, `DayNightDiagnostics` | Lighting authoring inputs plus resolved output and diagnostics |
 | `Sun`, `Moon`, `DayNightCamera` | Opt-in components for managed lights and managed cameras |
+| `TimeReactive`, `TimeActive` | Opt-in components for entities that react to time of day (e.g. street lamps) |
 | `DawnStarted`, `DayStarted`, `DuskStarted`, `NightStarted` | Phase transition messages |
 | `ScalarGradient`, `ColorGradient` and keyframes | Authored time-based curves for intensity, color, fog, and exposure |
 | `kelvin_to_color`, `solve_celestial_state`, `resolve_lighting`, `solar_daylight_window` | Pure helpers useful in tools or tests |
@@ -118,7 +119,32 @@ Common authoring shortcuts:
 | `full_cycle` | Faster cycle with live overlay for time, phase, elevation, lighting, and diagnostics | `cargo run -p saddle-world-day-night-example-full-cycle` |
 | `latitude` | Latitude-aware sun path and seasonal day-length shaping | `cargo run -p saddle-world-day-night-example-latitude` |
 | `fixed_time` | Frozen stylized golden-hour art direction | `cargo run -p saddle-world-day-night-example-fixed-time` |
+| `street_lights` | Buildings with time-reactive street lamps using `TimeReactive`/`TimeActive` | `cargo run -p saddle-world-day-night-example-street-lights` |
 | `atmosphere` | Camera-side atmosphere, exposure, bloom, and environment-map-light integration | `cargo run -p saddle-world-day-night-example-atmosphere` |
+
+## Time-Reactive Entities
+
+The `TimeReactive` component lets any entity declare a time-of-day activation window. The system automatically inserts or removes a `TimeActive` marker based on the current hour. This is useful for street lamps, window emissions, NPC schedules, or any time-dependent behavior.
+
+```rust
+use saddle_world_day_night::{TimeReactive, TimeActive};
+
+// Street lamp: active from 19:00 to 06:00 (wraps midnight)
+commands.spawn((
+    Name::new("Street Lamp"),
+    PointLight { intensity: 0.0, ..default() },
+    TimeReactive::night_active(),
+));
+
+// In your system, check for TimeActive:
+fn drive_lamp(mut lamps: Query<(&mut PointLight, Has<TimeActive>)>) {
+    for (mut light, is_active) in &mut lamps {
+        light.intensity = if is_active { 80_000.0 } else { 0.0 };
+    }
+}
+```
+
+Presets: `TimeReactive::night_active()` (19–6), `TimeReactive::day_active()` (6–19), `TimeReactive::custom(start, end)`.
 
 ## Crate-Local Lab
 

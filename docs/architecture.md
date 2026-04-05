@@ -33,6 +33,7 @@ DayNightConfig
   -> emit phase messages
   -> apply to Sun / Moon / GlobalAmbientLight / DayNightCamera targets
   -> publish DayNightDiagnostics
+  -> update TimeReactive entities (insert/remove TimeActive markers)
 ```
 
 ## Schedule Ordering
@@ -44,6 +45,7 @@ DayNightConfig
 3. `ResolveLighting`
 4. `DetectPhaseTransitions`
 5. `ApplyLighting`
+6. `UpdateTimeReactive`
 
 This keeps all downstream reads stable inside one frame:
 

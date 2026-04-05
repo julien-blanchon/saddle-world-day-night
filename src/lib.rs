@@ -12,7 +12,7 @@ pub use celestial::{
     CelestialModel, CelestialSettings, CelestialState, MoonPhase, SeasonSettings,
     solar_daylight_window, solve_celestial_state,
 };
-pub use components::{DayNightCamera, Moon, Sun};
+pub use components::{DayNightCamera, Moon, Sun, TimeActive, TimeReactive};
 pub use config::{
     AtmosphereTuning, DayNightConfig, ManagedLightConfig, ShadowConfig, SmoothingConfig,
     WriteThresholds,
@@ -42,6 +42,7 @@ pub enum DayNightSystems {
     ResolveLighting,
     DetectPhaseTransitions,
     ApplyLighting,
+    UpdateTimeReactive,
 }
 
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
@@ -131,6 +132,8 @@ impl Plugin for DayNightPlugin {
             .register_type::<TimeStepMode>()
             .register_type::<TimeWrapMode>()
             .register_type::<WeatherModulation>()
+            .register_type::<TimeActive>()
+            .register_type::<TimeReactive>()
             .register_type::<WriteThresholds>()
             .add_systems(self.activate_schedule, systems::activate_runtime)
             .add_systems(self.deactivate_schedule, systems::deactivate_runtime)
@@ -142,6 +145,7 @@ impl Plugin for DayNightPlugin {
                     DayNightSystems::ResolveLighting,
                     DayNightSystems::DetectPhaseTransitions,
                     DayNightSystems::ApplyLighting,
+                    DayNightSystems::UpdateTimeReactive,
                 )
                     .chain(),
             )
@@ -180,6 +184,12 @@ impl Plugin for DayNightPlugin {
                 )
                     .chain()
                     .in_set(DayNightSystems::ApplyLighting)
+                    .run_if(systems::runtime_is_active),
+            )
+            .add_systems(
+                self.update_schedule,
+                systems::update_time_reactive
+                    .in_set(DayNightSystems::UpdateTimeReactive)
                     .run_if(systems::runtime_is_active),
             );
     }

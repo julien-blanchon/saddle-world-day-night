@@ -35,4 +35,10 @@ fn setup(
         saddle_world_day_night::DayNightCamera::default(),
         true,
     );
+    support::spawn_instructions(
+        &mut commands,
+        "Fixed Time Demo — frozen at 18:35 (golden hour)\n\
+         Uses stylized saturated lighting profile.\n\
+         Drag the time slider in the pane to explore different times of day.",
+    );
 }

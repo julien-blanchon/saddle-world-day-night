@@ -37,4 +37,10 @@ fn setup(
         saddle_world_day_night::DayNightCamera::default(),
         true,
     );
+    support::spawn_instructions(
+        &mut commands,
+        "Basic Day/Night Demo\n\
+         Use the pane (top-right) to pause, scrub time, or adjust cycle speed.\n\
+         Watch the sun, shadows, ambient light, and fog change over the day.",
+    );
 }

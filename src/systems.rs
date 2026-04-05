@@ -519,6 +519,22 @@ pub(crate) fn apply_global_ambient_and_cameras(
     }
 }
 
+pub(crate) fn update_time_reactive(
+    mut commands: Commands,
+    time_of_day: Res<TimeOfDay>,
+    query: Query<(Entity, &crate::TimeReactive, Has<crate::TimeActive>)>,
+) {
+    let hour = time_of_day.cyclic_hour();
+    for (entity, reactive, currently_active) in &query {
+        let should_be_active = reactive.is_active_at(hour);
+        if should_be_active && !currently_active {
+            commands.entity(entity).insert(crate::TimeActive);
+        } else if !should_be_active && currently_active {
+            commands.entity(entity).remove::<crate::TimeActive>();
+        }
+    }
+}
+
 pub(crate) fn publish_diagnostics(
     time_of_day: Res<TimeOfDay>,
     celestial: Res<CelestialState>,

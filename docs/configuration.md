@@ -172,6 +172,23 @@ These thresholds only gate render-facing writes. The pure resolved resources are
 | `insert_missing_components` | `bool` | `true` | Insert render components when absent instead of only mutating existing ones |
 | `ensure_atmosphere` | `bool` | `false` | Ensure `Atmosphere` and `AtmosphereSettings` exist for this camera |
 
+## `TimeReactive`
+
+| Field | Type | Default | Valid Range | Effect |
+| --- | --- | --- | --- | --- |
+| `active_start_hour` | `f32` | `19.0` | `0.0..=24.0` | Hour at which the entity becomes active |
+| `active_end_hour` | `f32` | `6.0` | `0.0..=24.0` | Hour at which the entity becomes inactive |
+
+If `active_start_hour > active_end_hour`, the window wraps around midnight (e.g. 19:00–06:00).
+
+Preset constructors:
+
+- `TimeReactive::night_active()` — active 19:00–06:00 (default)
+- `TimeReactive::day_active()` — active 06:00–19:00
+- `TimeReactive::custom(start, end)` — arbitrary window
+
+The `UpdateTimeReactive` system set runs after `ApplyLighting` and inserts/removes `TimeActive` marker components.
+
 ## Tuning Notes
 
 ### Physically-Inspired Defaults vs Stylized Authoring

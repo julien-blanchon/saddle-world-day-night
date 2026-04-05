@@ -37,6 +37,8 @@ pub struct DayNightDemoPane {
     pub fog_visibility: f32,
     #[pane(monitor)]
     pub star_visibility: f32,
+    #[pane(monitor)]
+    pub phase: String,
 }
 
 impl DayNightDemoPane {
@@ -52,12 +54,34 @@ impl DayNightDemoPane {
             sun_lux: 0.0,
             fog_visibility: 0.0,
             star_visibility: 0.0,
+            phase: String::new(),
         }
     }
 }
 
+/// Tracks the last values the monitor wrote so we can detect user-initiated changes.
+#[derive(Resource, Default)]
+struct PaneSyncState {
+    last_monitor_time: f32,
+    last_monitor_seconds_per_hour: f32,
+    last_monitor_time_scale: f32,
+    last_monitor_cloud_cover: f32,
+    last_monitor_haze: f32,
+    last_monitor_precipitation: f32,
+}
+
 pub fn install_demo_pane(app: &mut App, config: &DayNightConfig) {
-    app.insert_resource(DayNightDemoPane::from_config(config));
+    let pane = DayNightDemoPane::from_config(config);
+    let sync_state = PaneSyncState {
+        last_monitor_time: pane.time_hours,
+        last_monitor_seconds_per_hour: pane.seconds_per_hour,
+        last_monitor_time_scale: pane.time_scale,
+        last_monitor_cloud_cover: pane.cloud_cover,
+        last_monitor_haze: pane.haze,
+        last_monitor_precipitation: pane.precipitation_dimming,
+    };
+    app.insert_resource(pane);
+    app.insert_resource(sync_state);
     app.add_plugins((
         bevy_flair::FlairPlugin,
         bevy_input_focus::InputDispatchPlugin,
@@ -192,6 +216,28 @@ pub fn spawn_outdoor_showcase(
     camera_entity
 }
 
+/// Spawns an instructions text overlay at the bottom-left of the screen.
+pub fn spawn_instructions(commands: &mut Commands, text: &str) {
+    commands.spawn((
+        Name::new("Instructions"),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(20.0),
+            bottom: Val::Px(20.0),
+            width: Val::Px(440.0),
+            padding: UiRect::all(Val::Px(10.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.04, 0.05, 0.08, 0.60)),
+        Text::new(text.to_string()),
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
+        TextColor(Color::srgba(0.8, 0.8, 0.85, 0.9)),
+    ));
+}
+
 pub fn spin_showcase(time: Res<Time>, mut query: Query<(&ShowcaseSpinner, &mut Transform)>) {
     for (spinner, mut transform) in &mut query {
         transform.rotate(Quat::from_axis_angle(
@@ -229,55 +275,96 @@ pub fn update_overlay(
     );
 }
 
+/// Detects user changes to pane sliders by comparing against the last monitor-written values.
+/// Only applies changes that differ from what the monitor last wrote (i.e. user-initiated edits).
 fn sync_demo_pane(
     pane: Res<DayNightDemoPane>,
+    sync: Res<PaneSyncState>,
     mut config: ResMut<DayNightConfig>,
-    mut time_of_day: ResMut<TimeOfDay>,
     mut weather: ResMut<WeatherModulation>,
 ) {
-    let desired_seconds_per_hour = pane.seconds_per_hour.max(0.01);
-    let desired_time_scale = pane.time_scale.max(0.0);
-    let desired_cloud_cover = pane.cloud_cover.clamp(0.0, 1.0);
-    let desired_haze = pane.haze.clamp(0.0, 1.0);
-    let desired_precipitation_dimming = pane.precipitation_dimming.clamp(0.0, 1.0);
-
+    // Pause is never written by the monitor, so always apply directly.
     if config.paused != pane.paused {
         config.paused = pane.paused;
     }
-    if (config.seconds_per_hour - desired_seconds_per_hour).abs() > f32::EPSILON {
-        config.seconds_per_hour = desired_seconds_per_hour;
+
+    // Detect user-initiated time scrub: the pane value differs from what the monitor last wrote.
+    let user_changed_time = (pane.time_hours - sync.last_monitor_time).abs() > 0.05;
+    if user_changed_time {
+        config.queue_scrub(pane.time_hours);
     }
-    if (config.time_scale - desired_time_scale).abs() > f32::EPSILON {
-        config.time_scale = desired_time_scale;
+
+    // seconds_per_hour: detect user change vs monitor echo
+    let user_changed_sph =
+        (pane.seconds_per_hour - sync.last_monitor_seconds_per_hour).abs() > 0.01;
+    if user_changed_sph {
+        let desired = pane.seconds_per_hour.max(0.01);
+        if (config.seconds_per_hour - desired).abs() > f32::EPSILON {
+            config.seconds_per_hour = desired;
+        }
     }
-    if (config.initial_time - pane.time_hours).abs() > 0.01 {
-        config.initial_time = pane.time_hours;
+
+    // time_scale: detect user change vs monitor echo
+    let user_changed_ts = (pane.time_scale - sync.last_monitor_time_scale).abs() > 0.01;
+    if user_changed_ts {
+        let desired = pane.time_scale.max(0.0);
+        if (config.time_scale - desired).abs() > f32::EPSILON {
+            config.time_scale = desired;
+        }
     }
-    if (time_of_day.hour - pane.time_hours).abs() > 0.01 {
-        time_of_day.set_hour(pane.time_hours);
-    }
-    if (weather.cloud_cover - desired_cloud_cover).abs() > f32::EPSILON {
+
+    // Weather controls: detect user change vs monitor echo
+    let desired_cloud_cover = pane.cloud_cover.clamp(0.0, 1.0);
+    let desired_haze = pane.haze.clamp(0.0, 1.0);
+    let desired_precipitation = pane.precipitation_dimming.clamp(0.0, 1.0);
+
+    if (pane.cloud_cover - sync.last_monitor_cloud_cover).abs() > 0.005 {
         weather.cloud_cover = desired_cloud_cover;
     }
-    if (weather.haze - desired_haze).abs() > f32::EPSILON {
+    if (pane.haze - sync.last_monitor_haze).abs() > 0.005 {
         weather.haze = desired_haze;
     }
-    if (weather.precipitation_dimming - desired_precipitation_dimming).abs() > f32::EPSILON {
-        weather.precipitation_dimming = desired_precipitation_dimming;
+    if (pane.precipitation_dimming - sync.last_monitor_precipitation).abs() > 0.005 {
+        weather.precipitation_dimming = desired_precipitation;
     }
 }
 
+/// Writes current simulation state back to the pane for display, and records what was written
+/// so that `sync_demo_pane` can distinguish user edits from monitor echo-back.
 fn sync_demo_monitors(
     time_of_day: Res<TimeOfDay>,
+    celestial: Res<CelestialState>,
     lighting: Res<DayNightLighting>,
+    config: Res<DayNightConfig>,
     weather: Res<WeatherModulation>,
     mut pane: ResMut<DayNightDemoPane>,
+    mut sync: ResMut<PaneSyncState>,
 ) {
+    // Update time slider to reflect current simulation time
     pane.time_hours = time_of_day.hour;
+    sync.last_monitor_time = time_of_day.hour;
+
+    // Update config-driven sliders
+    pane.seconds_per_hour = config.seconds_per_hour;
+    sync.last_monitor_seconds_per_hour = config.seconds_per_hour;
+
+    pane.time_scale = config.time_scale;
+    sync.last_monitor_time_scale = config.time_scale;
+
+    // Update weather sliders from resource (round-trip)
+    pane.cloud_cover = weather.cloud_cover;
+    sync.last_monitor_cloud_cover = weather.cloud_cover;
+
+    pane.haze = weather.haze;
+    sync.last_monitor_haze = weather.haze;
+
+    pane.precipitation_dimming = weather.precipitation_dimming;
+    sync.last_monitor_precipitation = weather.precipitation_dimming;
+
+    // Update monitors
     pane.sun_lux = lighting.sun_illuminance_lux;
     pane.fog_visibility = lighting.fog_visibility;
     pane.star_visibility = lighting.star_visibility;
-    pane.cloud_cover = weather.cloud_cover;
-    pane.haze = weather.haze;
-    pane.precipitation_dimming = weather.precipitation_dimming;
+    pane.phase = format!("{:?}", celestial.phase);
+    pane.paused = config.paused;
 }

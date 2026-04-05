@@ -1,0 +1,14 @@
+[package]
+name = "saddle-world-day-night-example-street-lights"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bevy = { workspace = true }
+saddle-world-day-night = { workspace = true }
+saddle-world-day-night-example-support = { path = "../support" }
+saddle-pane = { workspace = true }
+
+[lints]
+workspace = true

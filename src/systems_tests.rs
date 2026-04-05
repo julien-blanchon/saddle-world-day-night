@@ -126,3 +126,43 @@ fn plugin_does_not_require_auto_spawned_lights() {
     assert_eq!(sun_count, 0);
     assert_eq!(moon_count, 0);
 }
+
+#[test]
+fn time_reactive_inserts_and_removes_marker() {
+    let mut app = App::new();
+    let config = DayNightConfig {
+        initial_time: 20.0, // night
+        paused: true,
+        ..default()
+    };
+    app.add_plugins((
+        MinimalPlugins,
+        DayNightPlugin::default().with_config(config),
+    ));
+    let entity = app
+        .world_mut()
+        .spawn((Name::new("Lamp"), crate::TimeReactive::night_active()))
+        .id();
+
+    // First update: activates runtime + time reactive system runs
+    app.update();
+    // Second update: commands from update_time_reactive are applied
+    app.update();
+
+    assert!(
+        app.world().entity(entity).contains::<crate::TimeActive>(),
+        "entity should be TimeActive at 20:00 with night_active window (19–6)"
+    );
+
+    // Scrub to midday — should deactivate
+    app.world_mut()
+        .resource_mut::<DayNightConfig>()
+        .queue_scrub(12.0);
+    app.update();
+    app.update();
+
+    assert!(
+        !app.world().entity(entity).contains::<crate::TimeActive>(),
+        "entity should NOT be TimeActive at 12:00 with night_active window"
+    );
+}
