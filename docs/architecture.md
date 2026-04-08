@@ -84,7 +84,10 @@ This keeps camera ownership explicit. If a project wants a split between gamepla
 
 ### Ambient Light
 
-`GlobalAmbientLight` is always considered owned by the runtime while active. This is the only global render-facing output the crate writes unconditionally.
+`GlobalAmbientLight` is optional runtime-owned output.
+
+- With `GlobalAmbientConfig::apply = true` (default), the crate writes the resolved ambient color and brightness into `GlobalAmbientLight`.
+- With `GlobalAmbientConfig::apply = false`, the crate still resolves `DayNightLighting`, but leaves the app's ambient resource untouched.
 
 ## Atmosphere And Fog
 
@@ -157,4 +160,4 @@ The crate verifies the pure and Bevy boundaries separately:
 - pure unit tests for time, phase, celestial math, gradients, lighting, and Kelvin conversion
 - Bevy integration tests for plugin build, resource initialization, messages, and managed light behavior
 - standalone examples for focused visual use cases
-- crate-local lab scenarios for smoke, full cycle, fixed-time scrubbing, phase messages, and write-stability/perf behavior
+- crate-local lab scenarios for smoke, full cycle, fixed-time scrubbing, latitude-aware paths, camera hooks, time-reactive entities, weather modulation, phase messages, and write-stability/perf behavior

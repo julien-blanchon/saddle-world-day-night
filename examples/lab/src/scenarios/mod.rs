@@ -1,9 +1,21 @@
 mod support;
 
+use bevy::{
+    camera::Exposure,
+    light::{AtmosphereEnvironmentMapLight, VolumetricFog},
+    pbr::{Atmosphere, AtmosphereSettings, DistanceFog},
+    prelude::*,
+};
 use saddle_bevy_e2e::{action::Action, scenario::Scenario};
 use saddle_world_day_night::DayPhase;
 
 use crate::{PerformanceSnapshot, PhaseLog};
+
+#[derive(Resource, Clone, Copy, Default)]
+struct WeatherSnapshot {
+    clear_sun_lux: f32,
+    clear_fog_visibility: f32,
+}
 
 pub fn list_scenarios() -> Vec<&'static str> {
     vec![
@@ -12,6 +24,10 @@ pub fn list_scenarios() -> Vec<&'static str> {
         "day_night_fixed_time_scrub",
         "day_night_phase_messages",
         "day_night_performance",
+        "day_night_time_reactive",
+        "day_night_weather_modulation",
+        "day_night_latitude_model",
+        "day_night_camera_hooks",
     ]
 }
 
@@ -22,6 +38,10 @@ pub fn scenario_by_name(name: &str) -> Option<Scenario> {
         "day_night_fixed_time_scrub" => Some(day_night_fixed_time_scrub()),
         "day_night_phase_messages" => Some(day_night_phase_messages()),
         "day_night_performance" => Some(day_night_performance()),
+        "day_night_time_reactive" => Some(day_night_time_reactive()),
+        "day_night_weather_modulation" => Some(day_night_weather_modulation()),
+        "day_night_latitude_model" => Some(day_night_latitude_model()),
+        "day_night_camera_hooks" => Some(day_night_camera_hooks()),
         _ => None,
     }
 }
@@ -166,6 +186,137 @@ fn day_night_phase_messages() -> Scenario {
         .build()
 }
 
+fn day_night_time_reactive() -> Scenario {
+    Scenario::builder("day_night_time_reactive")
+        .description("Spawn a TimeReactive entity that is active at night (19:00–06:00), scrub to daytime and assert TimeActive is absent, then scrub to night and assert TimeActive is present.")
+        .then(Action::Custom(Box::new(|world| {
+            // Pause time and drive the clock directly so the pane sync does not fight the scenario.
+            {
+                let mut pane =
+                    world.resource_mut::<saddle_world_day_night_example_support::DayNightDemoPane>();
+                pane.paused = true;
+                pane.time_hours = 14.0;
+            }
+            {
+                let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+                config.paused = true;
+                config.pending_override = None;
+            }
+            world
+                .resource_mut::<saddle_world_day_night::TimeOfDay>()
+                .set_hour(14.0);
+        })))
+        .then(Action::WaitFrames(2))
+        .then(Action::Custom(Box::new(|world| {
+            // Spawn the reactive entity (active window: 19:00–06:00, i.e. night).
+            world.spawn((
+                Name::new("NightLamp"),
+                saddle_world_day_night::TimeReactive {
+                    active_start_hour: 19.0,
+                    active_end_hour: 6.0,
+                },
+            ));
+        })))
+        .then(Action::WaitFrames(2))
+        // At 14:00 the lamp should NOT be active.
+        .then(Action::Custom(Box::new(|world| {
+            let mut q = world.query::<(&Name, Has<saddle_world_day_night::TimeActive>)>();
+            let (_, is_active) = q
+                .iter(world)
+                .find(|(name, _)| name.as_str() == "NightLamp")
+                .expect("NightLamp should exist");
+            assert!(
+                !is_active,
+                "TimeActive should be absent during daytime for NightLamp"
+            );
+        })))
+        .then(Action::Screenshot("time_reactive_day".into()))
+        // Now scrub to 22:00 – inside the active window.
+        .then(Action::Custom(Box::new(|world| {
+            {
+                let mut pane =
+                    world.resource_mut::<saddle_world_day_night_example_support::DayNightDemoPane>();
+                pane.paused = true;
+                pane.time_hours = 22.0;
+            }
+            {
+                let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+                config.paused = true;
+                config.pending_override = None;
+            }
+            world
+                .resource_mut::<saddle_world_day_night::TimeOfDay>()
+                .set_hour(22.0);
+        })))
+        .then(Action::WaitFrames(2))
+        .then(Action::WaitFrames(2))
+        .then(Action::Custom(Box::new(|world| {
+            let mut q = world.query::<(&Name, Has<saddle_world_day_night::TimeActive>)>();
+            let (_, is_active) = q
+                .iter(world)
+                .find(|(name, _)| name.as_str() == "NightLamp")
+                .expect("NightLamp should exist");
+            assert!(
+                is_active,
+                "TimeActive should be present during the active night window"
+            );
+        })))
+        .then(Action::Screenshot("time_reactive_night".into()))
+        .build()
+}
+
+fn day_night_weather_modulation() -> Scenario {
+    Scenario::builder("day_night_weather_modulation")
+        .description("Inject WeatherModulation (heavy cloud cover + precipitation dimming) at noon and assert that resolved sun illuminance drops compared to the clear baseline.")
+        .then(Action::Custom(Box::new(|world| {
+            let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+            config.paused = true;
+            config.queue_scrub(12.0);
+        })))
+        .then(Action::WaitFrames(5))
+        // Capture clear-sky baseline.
+        .then(Action::Custom(Box::new(|world| {
+            let lighting = world.resource::<saddle_world_day_night::DayNightLighting>();
+            let clear_sun_lux = lighting.sun_illuminance_lux;
+            let clear_fog_visibility = lighting.fog_visibility;
+            let _ = lighting;
+            world.insert_resource(WeatherSnapshot {
+                clear_sun_lux,
+                clear_fog_visibility,
+            });
+        })))
+        .then(Action::Screenshot("weather_modulation_clear".into()))
+        // Apply heavy overcast modulation.
+        .then(Action::Custom(Box::new(|world| {
+            let mut modulation = world.resource_mut::<saddle_world_day_night::WeatherModulation>();
+            modulation.cloud_cover = 1.0;
+            modulation.haze = 0.8;
+            modulation.precipitation_dimming = 0.5;
+        })))
+        .then(Action::WaitFrames(5))
+        .then(Action::Custom(Box::new(|world| {
+            let lighting = world.resource::<saddle_world_day_night::DayNightLighting>();
+            let baseline = *world.resource::<WeatherSnapshot>();
+            assert!(
+                lighting.sun_illuminance_lux < baseline.clear_sun_lux,
+                "cloud cover should dim sun illuminance relative to the clear baseline"
+            );
+            assert!(
+                lighting.fog_visibility < baseline.clear_fog_visibility,
+                "heavy haze should reduce fog visibility relative to the clear baseline"
+            );
+            let modulation = world.resource::<saddle_world_day_night::WeatherModulation>();
+            assert!((modulation.cloud_cover - 1.0).abs() < 0.01);
+        })))
+        .then(Action::Screenshot("weather_modulation_overcast".into()))
+        // Reset modulation.
+        .then(Action::Custom(Box::new(|world| {
+            *world.resource_mut::<saddle_world_day_night::WeatherModulation>() =
+                saddle_world_day_night::WeatherModulation::default();
+        })))
+        .build()
+}
+
 fn day_night_performance() -> Scenario {
     Scenario::builder("day_night_performance")
         .description("Pause the lab at noon and assert that write counters stay stable instead of rewriting identical light and fog values every frame.")
@@ -196,5 +347,88 @@ fn day_night_performance() -> Scenario {
             assert!(diagnostics.exposure_writes <= before.exposure_writes + 1);
         })))
         .then(Action::Screenshot("day_night_performance".into()))
+        .build()
+}
+
+fn day_night_latitude_model() -> Scenario {
+    Scenario::builder("day_night_latitude_model")
+        .description("Switch the lab from the default simple arc to a latitude-aware summer model, then verify the longer daylight window and capture noon plus evening checkpoints.")
+        .then(Action::Custom(Box::new(|world| {
+            let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+            config.paused = true;
+            config.queue_scrub(12.0);
+        })))
+        .then(Action::WaitFrames(4))
+        .then(Action::Custom(Box::new(|world| {
+            let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+            config.celestial.model = saddle_world_day_night::CelestialModel::LatitudeAware {
+                latitude_degrees: 62.0,
+                season: saddle_world_day_night::SeasonSettings {
+                    season_progress: 0.25,
+                    ..default()
+                },
+            };
+            config.queue_scrub(12.0);
+        })))
+        .then(Action::WaitFrames(4))
+        .then(Action::Custom(Box::new(|world| {
+            let celestial = world.resource::<saddle_world_day_night::CelestialState>();
+            assert!(
+                celestial.sunrise_hour < 5.0,
+                "summer sunrise should be earlier than the generic 6:00 window"
+            );
+            assert!(
+                celestial.sunset_hour > 19.0,
+                "summer sunset should be later than the generic 18:00 window"
+            );
+            assert!(
+                (40.0..60.0).contains(&celestial.sun_elevation_degrees),
+                "latitude-aware summer noon should stay in a believable mid-latitude range"
+            );
+        })))
+        .then(Action::Screenshot("latitude_model_noon".into()))
+        .then(Action::Custom(Box::new(|world| {
+            world
+                .resource_mut::<saddle_world_day_night::DayNightConfig>()
+                .queue_scrub(20.0);
+        })))
+        .then(Action::WaitFrames(4))
+        .then(Action::Custom(Box::new(|world| {
+            let celestial = world.resource::<saddle_world_day_night::CelestialState>();
+            assert!(
+                celestial.sun_elevation_degrees > 2.0,
+                "summer evening sun should still be above the horizon around 20:00"
+            );
+        })))
+        .then(Action::Screenshot("latitude_model_evening".into()))
+        .build()
+}
+
+fn day_night_camera_hooks() -> Scenario {
+    Scenario::builder("day_night_camera_hooks")
+        .description("Verify the managed lab camera receives fog, exposure, atmosphere, and environment-map hooks, then capture a stable noon checkpoint.")
+        .then(Action::Custom(Box::new(|world| {
+            let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+            config.paused = true;
+            config.queue_scrub(12.0);
+        })))
+        .then(Action::WaitFrames(5))
+        .then(Action::Custom(Box::new(|world| {
+            let camera = support::entity_by_name::<Camera>(world, "Lab Camera")
+                .expect("Lab Camera should exist");
+            let entity = world.entity(camera);
+            assert!(entity.contains::<DistanceFog>());
+            assert!(entity.contains::<VolumetricFog>());
+            assert!(entity.contains::<Exposure>());
+            assert!(entity.contains::<Atmosphere>());
+            assert!(entity.contains::<AtmosphereSettings>());
+            assert!(entity.contains::<AtmosphereEnvironmentMapLight>());
+
+            let diagnostics = world.resource::<saddle_world_day_night::DayNightDiagnostics>();
+            assert!(diagnostics.fog_writes > 0);
+            assert!(diagnostics.exposure_writes > 0);
+            assert!(diagnostics.environment_map_writes > 0);
+        })))
+        .then(Action::Screenshot("camera_hooks_noon".into()))
         .build()
 }

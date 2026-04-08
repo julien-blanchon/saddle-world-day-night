@@ -72,7 +72,7 @@ For examples and labs, `DayNightPlugin::default()` is the always-on entrypoint. 
 
 - `Sun` / `Moon`: the crate only mutates directional lights tagged with these marker components. With the default config it will auto-spawn them if they do not exist.
 - `DayNightCamera`: the crate only mutates cameras tagged with this marker. Untagged cameras are ignored.
-- `GlobalAmbientLight`: always driven by the crate while the runtime is active.
+- `GlobalAmbientLight`: driven by the crate only when `DayNightConfig::global_ambient.apply` is `true`.
 - `DistanceFog`, `VolumetricFog`, `Exposure`, `AtmosphereEnvironmentMapLight`, `Atmosphere`, and `AtmosphereSettings`: only inserted or mutated on tagged `DayNightCamera` entities, and only if the corresponding `DayNightCamera` flags allow it.
 - Consumers own gameplay meaning. Read `TimeOfDay`, `CelestialState`, `DayNightLighting`, `DayNightDiagnostics`, and the phase messages to drive schedules, AI, audio, weather, UI, or spawning.
 
@@ -91,6 +91,7 @@ For examples and labs, `DayNightPlugin::default()` is the always-on entrypoint. 
 | `CelestialSettings`, `CelestialModel`, `SeasonSettings` | Sun/moon path configuration |
 | `CelestialState`, `MoonPhase` | Resolved read-only celestial output |
 | `LightingProfile`, `WeatherModulation`, `DayNightLighting`, `DayNightDiagnostics` | Lighting authoring inputs plus resolved output and diagnostics |
+| `ManagedLightConfig`, `GlobalAmbientConfig` | Ownership controls for spawned lights and global ambient output |
 | `Sun`, `Moon`, `DayNightCamera` | Opt-in components for managed lights and managed cameras |
 | `TimeReactive`, `TimeActive` | Opt-in components for entities that react to time of day (e.g. street lamps) |
 | `DawnStarted`, `DayStarted`, `DuskStarted`, `NightStarted` | Phase transition messages |
@@ -122,6 +123,20 @@ Common authoring shortcuts:
 | `street_lights` | Buildings with time-reactive street lamps using `TimeReactive`/`TimeActive` | `cargo run -p saddle-world-day-night-example-street-lights` |
 | `atmosphere` | Camera-side atmosphere, exposure, bloom, and environment-map-light integration | `cargo run -p saddle-world-day-night-example-atmosphere` |
 
+Lab E2E coverage for those feature slices:
+
+| Example / Feature | Scenario |
+| --- | --- |
+| `basic` | `day_night_smoke` |
+| `full_cycle` | `day_night_full_cycle` |
+| `latitude` | `day_night_latitude_model` |
+| `fixed_time` | `day_night_fixed_time_scrub` |
+| `street_lights` | `day_night_time_reactive` |
+| `atmosphere` | `day_night_camera_hooks` |
+| weather response | `day_night_weather_modulation` |
+| phase message surface | `day_night_phase_messages` |
+| steady-state write behavior | `day_night_performance` |
+
 ## Time-Reactive Entities
 
 The `TimeReactive` component lets any entity declare a time-of-day activation window. The system automatically inserts or removes a `TimeActive` marker based on the current hour. This is useful for street lamps, window emissions, NPC schedules, or any time-dependent behavior.
@@ -148,7 +163,7 @@ Presets: `TimeReactive::night_active()` (19–6), `TimeReactive::day_active()` (
 
 ## Crate-Local Lab
 
-The workspace includes a crate-local lab app at `shared/world/saddle-world-day-night/examples/lab`:
+The workspace includes a crate-local lab app at `crates/world/saddle-world-day-night/examples/lab`:
 
 ```bash
 cargo run -p saddle-world-day-night-lab
@@ -162,6 +177,10 @@ cargo run -p saddle-world-day-night-lab --features e2e -- day_night_full_cycle
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_fixed_time_scrub
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_phase_messages
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_performance
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_time_reactive
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_weather_modulation
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_latitude_model
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_camera_hooks
 ```
 
 ## BRP

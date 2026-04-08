@@ -6,6 +6,7 @@ members = [
     "latitude",
     "fixed_time",
     "street_lights",
+    "atmosphere",
     "lab",
 ]
 resolver = "3"

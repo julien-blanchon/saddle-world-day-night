@@ -56,7 +56,10 @@ fn main() {
     #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
     app.add_plugins(bevy_brp_extras::BrpExtrasPlugin::default());
     #[cfg(feature = "e2e")]
-    app.add_plugins(e2e::E2EPlugin);
+    {
+        app.add_plugins(e2e::E2EPlugin);
+        app.insert_resource(support::DemoPaneSyncDisabled);
+    }
 
     let config = lab_config();
     support::install_demo_pane(&mut app, &config);

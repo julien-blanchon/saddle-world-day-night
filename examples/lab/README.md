@@ -26,6 +26,10 @@ cargo run -p saddle-world-day-night-lab --features e2e -- day_night_full_cycle
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_fixed_time_scrub
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_phase_messages
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_performance
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_time_reactive
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_weather_modulation
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_latitude_model
+cargo run -p saddle-world-day-night-lab --features e2e -- day_night_camera_hooks
 ```
 
 ## BRP

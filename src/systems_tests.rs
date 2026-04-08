@@ -1,8 +1,9 @@
+use bevy::pbr::{Atmosphere, DistanceFog, ScatteringMedium};
 use bevy::prelude::*;
 
 use crate::{
-    DawnStarted, DayNightConfig, DayNightPlugin, DayNightSystems, DayStarted, DuskStarted,
-    ManagedLightConfig, Moon, NightStarted, Sun,
+    DawnStarted, DayNightCamera, DayNightConfig, DayNightPlugin, DayNightSystems, DayStarted,
+    DuskStarted, GlobalAmbientConfig, ManagedLightConfig, Moon, NightStarted, Sun,
 };
 
 #[derive(Resource, Default)]
@@ -11,6 +12,11 @@ struct PhaseCounts {
     day: u32,
     dusk: u32,
     night: u32,
+}
+
+#[derive(Resource, Default)]
+struct FogChangeCounts {
+    distance_fog_changes: u32,
 }
 
 fn count_phase_messages(
@@ -24,6 +30,17 @@ fn count_phase_messages(
     counts.day += day.read().count() as u32;
     counts.dusk += dusk.read().count() as u32;
     counts.night += night.read().count() as u32;
+}
+
+fn count_distance_fog_changes(
+    mut counts: ResMut<FogChangeCounts>,
+    fogs: Query<Ref<DistanceFog>, With<DayNightCamera>>,
+) {
+    for fog in &fogs {
+        if fog.is_changed() {
+            counts.distance_fog_changes += 1;
+        }
+    }
 }
 
 #[test]
@@ -164,5 +181,129 @@ fn time_reactive_inserts_and_removes_marker() {
     assert!(
         !app.world().entity(entity).contains::<crate::TimeActive>(),
         "entity should NOT be TimeActive at 12:00 with night_active window"
+    );
+}
+
+#[test]
+fn plugin_can_leave_global_ambient_to_the_consumer() {
+    let mut app = App::new();
+    let ambient = GlobalAmbientLight {
+        color: Color::srgb(0.12, 0.18, 0.24),
+        brightness: 7.5,
+        ..default()
+    };
+    let config = DayNightConfig {
+        global_ambient: GlobalAmbientConfig { apply: false },
+        ..default()
+    };
+
+    app.insert_resource(ambient.clone());
+    app.add_plugins((
+        MinimalPlugins,
+        DayNightPlugin::default().with_config(config),
+    ));
+
+    app.update();
+
+    let current = app.world().resource::<GlobalAmbientLight>();
+    assert_eq!(current.color, ambient.color);
+    assert_eq!(current.brightness, ambient.brightness);
+}
+
+#[test]
+fn paused_runtime_stops_rewriting_distance_fog_once_settled() {
+    let mut app = App::new();
+    let config = DayNightConfig::default().fixed_time(12.0);
+
+    app.add_plugins((
+        MinimalPlugins,
+        DayNightPlugin::default().with_config(config),
+    ));
+    app.insert_resource(FogChangeCounts::default());
+    app.add_systems(
+        Update,
+        count_distance_fog_changes.after(DayNightSystems::ApplyLighting),
+    );
+    let _camera = app
+        .world_mut()
+        .spawn((
+            Name::new("Fog Camera"),
+            Camera3d::default(),
+            DayNightCamera::default(),
+            Transform::default(),
+        ))
+        .id();
+
+    app.update();
+    app.update();
+    for _ in 0..180 {
+        app.update();
+    }
+    app.world_mut()
+        .resource_mut::<FogChangeCounts>()
+        .distance_fog_changes = 0;
+
+    app.update();
+
+    let counts = app.world().resource::<FogChangeCounts>();
+    assert_eq!(
+        counts.distance_fog_changes, 0,
+        "DistanceFog should stay unchanged on stable paused frames"
+    );
+}
+
+#[test]
+fn atmosphere_density_changes_refresh_existing_camera_medium() {
+    let mut app = App::new();
+    let config = DayNightConfig::default().fixed_time(12.0);
+
+    app.insert_resource(Assets::<ScatteringMedium>::default());
+    app.add_plugins((
+        MinimalPlugins,
+        DayNightPlugin::default().with_config(config),
+    ));
+
+    let camera = app
+        .world_mut()
+        .spawn((
+            Name::new("Atmosphere Camera"),
+            Camera3d::default(),
+            DayNightCamera {
+                ensure_atmosphere: true,
+                ..default()
+            },
+            Transform::default(),
+        ))
+        .id();
+
+    app.update();
+    app.update();
+
+    let initial_medium = app
+        .world()
+        .entity(camera)
+        .get::<Atmosphere>()
+        .expect("camera should receive an atmosphere component")
+        .medium
+        .clone();
+
+    app.world_mut()
+        .resource_mut::<DayNightConfig>()
+        .atmosphere
+        .density_multiplier = 1.8;
+    app.update();
+    app.update();
+
+    let updated_medium = app
+        .world()
+        .entity(camera)
+        .get::<Atmosphere>()
+        .expect("camera atmosphere should remain present")
+        .medium
+        .clone();
+
+    assert_ne!(
+        initial_medium, updated_medium,
+        "changing density_multiplier should refresh the managed atmosphere medium"
     );
 }

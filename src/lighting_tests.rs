@@ -140,3 +140,32 @@ fn smoothing_does_not_delay_shadow_flag_changes() {
     assert!(smoothed.sun_shadows_enabled);
     assert!(smoothed.moon_shadows_enabled);
 }
+
+#[test]
+fn idle_steps_snap_directly_to_the_target() {
+    let current = DayNightLighting {
+        ambient_brightness: 12.0,
+        fog_visibility: 120.0,
+        ..Default::default()
+    };
+    let target = DayNightLighting {
+        ambient_brightness: 42.0,
+        fog_visibility: 650.0,
+        ..Default::default()
+    };
+
+    let resolved = smooth_lighting(
+        &current,
+        &target,
+        &SmoothingConfig {
+            continuous_seconds: 0.18,
+            jump_seconds: 1.0,
+            smooth_scrubs: true,
+        },
+        TimeStepMode::Idle,
+        1.0 / 60.0,
+    );
+
+    assert_eq!(resolved.ambient_brightness, target.ambient_brightness);
+    assert_eq!(resolved.fog_visibility, target.fog_visibility);
+}

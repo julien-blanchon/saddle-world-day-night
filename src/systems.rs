@@ -14,6 +14,7 @@ use crate::{
 #[derive(Resource, Default)]
 pub(crate) struct AtmosphereAssetCache {
     earthlike: Option<Handle<ScatteringMedium>>,
+    density_multiplier: Option<f32>,
 }
 
 #[derive(Resource, Default)]
@@ -29,6 +30,7 @@ pub(crate) struct DayNightRuntimeState {
 
 pub(crate) fn activate_runtime(
     config: Res<DayNightConfig>,
+    weather: Res<crate::WeatherModulation>,
     mut runtime: ResMut<DayNightRuntimeState>,
     mut time_of_day: ResMut<TimeOfDay>,
     mut celestial: ResMut<CelestialState>,
@@ -56,7 +58,7 @@ pub(crate) fn activate_runtime(
         *time_of_day,
         celestial.as_ref(),
         &config.lighting,
-        &crate::WeatherModulation::default(),
+        weather.as_ref(),
         &config.shadows,
     );
     celestial.suggested_exposure_ev100 = lighting.suggested_exposure_ev100;
@@ -349,7 +351,7 @@ pub(crate) fn apply_global_ambient_and_cameras(
         (
             Entity,
             &DayNightCamera,
-            Option<&mut DistanceFog>,
+            Option<&DistanceFog>,
             Option<&mut VolumetricFog>,
             Option<&mut Exposure>,
             Option<&mut AtmosphereEnvironmentMapLight>,
@@ -359,19 +361,21 @@ pub(crate) fn apply_global_ambient_and_cameras(
         With<Camera>,
     >,
 ) {
-    let mut ambient_wrote = false;
-    ambient_wrote |= update_color(
-        &mut global_ambient.color,
-        lighting.ambient_color,
-        config.write_thresholds.color_epsilon,
-    );
-    ambient_wrote |= update_scalar(
-        &mut global_ambient.brightness,
-        lighting.ambient_brightness,
-        config.write_thresholds.ambient_brightness_epsilon,
-    );
-    if ambient_wrote {
-        diagnostics.ambient_writes += 1;
+    if config.global_ambient.apply {
+        let mut ambient_wrote = false;
+        ambient_wrote |= update_color(
+            &mut global_ambient.color,
+            lighting.ambient_color,
+            config.write_thresholds.color_epsilon,
+        );
+        ambient_wrote |= update_scalar(
+            &mut global_ambient.brightness,
+            lighting.ambient_brightness,
+            config.write_thresholds.ambient_brightness_epsilon,
+        );
+        if ambient_wrote {
+            diagnostics.ambient_writes += 1;
+        }
     }
 
     let environment_map_intensity = (0.45 + lighting.ambient_brightness / 36.0)
@@ -393,29 +397,39 @@ pub(crate) fn apply_global_ambient_and_cameras(
         }
 
         if camera.apply_distance_fog {
-            if let Some(mut fog) = distance_fog {
-                let mut wrote = false;
-                wrote |= update_color(
-                    &mut fog.color,
-                    lighting.fog_color,
-                    config.write_thresholds.color_epsilon,
+            if let Some(fog) = distance_fog {
+                let directional_light_color = lighting.sun_color.with_alpha(
+                    (0.10 + lighting.daylight_factor * 0.32 + lighting.twilight_factor * 0.22)
+                        .clamp(0.0, 1.0),
                 );
-                wrote |= update_color(
-                    &mut fog.directional_light_color,
-                    lighting.sun_color.with_alpha(
-                        (0.10 + lighting.daylight_factor * 0.32 + lighting.twilight_factor * 0.22)
-                            .clamp(0.0, 1.0),
-                    ),
-                    config.write_thresholds.color_epsilon,
-                );
-                fog.directional_light_exponent = 26.0;
                 let next_falloff = FogFalloff::from_visibility_colors(
                     lighting.fog_visibility,
                     lighting.fog_color.with_alpha(1.0),
                     lighting.ambient_color.with_alpha(1.0),
                 );
-                fog.falloff = next_falloff;
-                if wrote {
+                let should_update = !color_approx_eq(
+                    fog.color,
+                    lighting.fog_color,
+                    config.write_thresholds.color_epsilon,
+                ) || !color_approx_eq(
+                    fog.directional_light_color,
+                    directional_light_color,
+                    config.write_thresholds.color_epsilon,
+                ) || (fog.directional_light_exponent - 26.0).abs() > 1e-4
+                    || !fog_falloff_approx_eq(
+                        &fog.falloff,
+                        &next_falloff,
+                        config.write_thresholds.fog_visibility_epsilon,
+                        config.write_thresholds.color_epsilon,
+                    );
+
+                if should_update {
+                    commands.entity(entity).insert(DistanceFog {
+                        color: lighting.fog_color,
+                        directional_light_color,
+                        directional_light_exponent: 26.0,
+                        falloff: next_falloff,
+                    });
                     diagnostics.fog_writes += 1;
                 }
             } else if camera.insert_missing_components {
@@ -490,6 +504,14 @@ pub(crate) fn apply_global_ambient_and_cameras(
         }
 
         if camera.ensure_atmosphere {
+            let atmosphere_handle = scattering_media.as_mut().map(|media| {
+                earthlike_medium_handle(
+                    atmosphere_cache.as_mut(),
+                    media.as_mut(),
+                    config.atmosphere.density_multiplier,
+                )
+            });
+
             if let Some(mut settings_component) = atmosphere_settings {
                 update_scalar(
                     &mut settings_component.scene_units_to_m,
@@ -503,13 +525,12 @@ pub(crate) fn apply_global_ambient_and_cameras(
                 });
             }
 
-            if atmosphere.is_none() && camera.insert_missing_components {
-                if let Some(ref mut media) = scattering_media {
-                    let handle = earthlike_medium_handle(
-                        atmosphere_cache.as_mut(),
-                        media.as_mut(),
-                        config.atmosphere.density_multiplier,
-                    );
+            if let Some(handle) = atmosphere_handle {
+                if let Some(mut atmosphere_component) = atmosphere {
+                    if atmosphere_component.medium != handle {
+                        atmosphere_component.medium = handle;
+                    }
+                } else if camera.insert_missing_components {
                     commands
                         .entity(entity)
                         .insert(Atmosphere::earthlike(handle));
@@ -563,15 +584,25 @@ fn earthlike_medium_handle(
     media: &mut Assets<ScatteringMedium>,
     density_multiplier: f32,
 ) -> Handle<ScatteringMedium> {
-    if let Some(handle) = &cache.earthlike {
-        return handle.clone();
+    let clamped_density = density_multiplier.max(0.01);
+    let needs_refresh = cache.earthlike.is_none()
+        || cache
+            .density_multiplier
+            .map(|current| (current - clamped_density).abs() > 1e-4)
+            .unwrap_or(true);
+
+    if needs_refresh {
+        let handle = media
+            .add(ScatteringMedium::earthlike(256, 256).with_density_multiplier(clamped_density));
+        cache.earthlike = Some(handle.clone());
+        cache.density_multiplier = Some(clamped_density);
+        return handle;
     }
 
-    let handle = media.add(
-        ScatteringMedium::earthlike(256, 256).with_density_multiplier(density_multiplier.max(0.01)),
-    );
-    cache.earthlike = Some(handle.clone());
-    handle
+    cache
+        .earthlike
+        .clone()
+        .expect("earthlike handle should be cached when no refresh is needed")
 }
 
 fn default_distance_fog(lighting: &DayNightLighting) -> DistanceFog {
@@ -606,13 +637,7 @@ fn update_direction(transform: &mut Transform, direction: Vec3, epsilon: f32) ->
 }
 
 fn update_color(current: &mut Color, next: Color, epsilon: f32) -> bool {
-    let left = LinearRgba::from(*current);
-    let right = LinearRgba::from(next);
-    let delta = (left.red - right.red).abs()
-        + (left.green - right.green).abs()
-        + (left.blue - right.blue).abs()
-        + (left.alpha - right.alpha).abs();
-    if delta <= epsilon {
+    if color_approx_eq(*current, next, epsilon) {
         return false;
     }
     *current = next;
@@ -625,6 +650,73 @@ fn update_scalar(current: &mut f32, next: f32, epsilon: f32) -> bool {
     }
     *current = next;
     true
+}
+
+fn fog_falloff_approx_eq(
+    left: &FogFalloff,
+    right: &FogFalloff,
+    scalar_epsilon: f32,
+    vector_epsilon: f32,
+) -> bool {
+    match (left, right) {
+        (
+            FogFalloff::Linear {
+                start: left_start,
+                end: left_end,
+            },
+            FogFalloff::Linear {
+                start: right_start,
+                end: right_end,
+            },
+        ) => {
+            (left_start - right_start).abs() <= scalar_epsilon
+                && (left_end - right_end).abs() <= scalar_epsilon
+        }
+        (
+            FogFalloff::Exponential {
+                density: left_density,
+            },
+            FogFalloff::Exponential {
+                density: right_density,
+            },
+        )
+        | (
+            FogFalloff::ExponentialSquared {
+                density: left_density,
+            },
+            FogFalloff::ExponentialSquared {
+                density: right_density,
+            },
+        ) => (left_density - right_density).abs() <= scalar_epsilon,
+        (
+            FogFalloff::Atmospheric {
+                extinction: left_extinction,
+                inscattering: left_inscattering,
+            },
+            FogFalloff::Atmospheric {
+                extinction: right_extinction,
+                inscattering: right_inscattering,
+            },
+        ) => {
+            vec3_approx_eq(*left_extinction, *right_extinction, vector_epsilon)
+                && vec3_approx_eq(*left_inscattering, *right_inscattering, vector_epsilon)
+        }
+        _ => false,
+    }
+}
+
+fn vec3_approx_eq(left: Vec3, right: Vec3, epsilon: f32) -> bool {
+    left.distance_squared(right) <= epsilon * epsilon
+}
+
+fn color_approx_eq(left: Color, right: Color, epsilon: f32) -> bool {
+    let left = LinearRgba::from(left);
+    let right = LinearRgba::from(right);
+    let delta = (left.red - right.red).abs()
+        + (left.green - right.green).abs()
+        + (left.blue - right.blue).abs()
+        + (left.alpha - right.alpha).abs();
+    delta <= epsilon
 }
 
 #[cfg(test)]

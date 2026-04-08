@@ -14,8 +14,8 @@ pub use celestial::{
 };
 pub use components::{DayNightCamera, Moon, Sun, TimeActive, TimeReactive};
 pub use config::{
-    AtmosphereTuning, DayNightConfig, ManagedLightConfig, ShadowConfig, SmoothingConfig,
-    WriteThresholds,
+    AtmosphereTuning, DayNightConfig, GlobalAmbientConfig, ManagedLightConfig, ShadowConfig,
+    SmoothingConfig, WriteThresholds,
 };
 pub use gradient::{ColorGradient, ColorKeyframe, ScalarGradient, ScalarKeyframe};
 pub use lighting::{
@@ -116,6 +116,7 @@ impl Plugin for DayNightPlugin {
             .register_type::<DayNightLighting>()
             .register_type::<DayPhase>()
             .register_type::<DayPhaseBoundaries>()
+            .register_type::<GlobalAmbientConfig>()
             .register_type::<LightingProfile>()
             .register_type::<ManagedLightConfig>()
             .register_type::<Moon>()

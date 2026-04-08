@@ -59,6 +59,9 @@ impl DayNightDemoPane {
     }
 }
 
+#[derive(Resource, Default)]
+pub struct DemoPaneSyncDisabled;
+
 /// Tracks the last values the monitor wrote so we can detect user-initiated changes.
 #[derive(Resource, Default)]
 struct PaneSyncState {
@@ -280,9 +283,14 @@ pub fn update_overlay(
 fn sync_demo_pane(
     pane: Res<DayNightDemoPane>,
     sync: Res<PaneSyncState>,
+    sync_disabled: Option<Res<DemoPaneSyncDisabled>>,
     mut config: ResMut<DayNightConfig>,
     mut weather: ResMut<WeatherModulation>,
 ) {
+    if sync_disabled.is_some() {
+        return;
+    }
+
     // Pause is never written by the monitor, so always apply directly.
     if config.paused != pane.paused {
         config.paused = pane.paused;

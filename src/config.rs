@@ -16,6 +16,18 @@ impl Default for ManagedLightConfig {
 
 #[derive(Clone, Debug, Reflect)]
 #[reflect(Default, Clone)]
+pub struct GlobalAmbientConfig {
+    pub apply: bool,
+}
+
+impl Default for GlobalAmbientConfig {
+    fn default() -> Self {
+        Self { apply: true }
+    }
+}
+
+#[derive(Clone, Debug, Reflect)]
+#[reflect(Default, Clone)]
 pub struct ShadowConfig {
     pub sun_min_elevation_degrees: f32,
     pub sun_min_illuminance_lux: f32,
@@ -111,6 +123,7 @@ pub struct DayNightConfig {
     pub celestial: CelestialSettings,
     pub lighting: LightingProfile,
     pub managed_lights: ManagedLightConfig,
+    pub global_ambient: GlobalAmbientConfig,
     pub shadows: ShadowConfig,
     pub smoothing: SmoothingConfig,
     pub write_thresholds: WriteThresholds,
@@ -130,6 +143,7 @@ impl Default for DayNightConfig {
             celestial: CelestialSettings::default(),
             lighting: LightingProfile::realistic_outdoor(),
             managed_lights: ManagedLightConfig::default(),
+            global_ambient: GlobalAmbientConfig::default(),
             shadows: ShadowConfig::default(),
             smoothing: SmoothingConfig::default(),
             write_thresholds: WriteThresholds::default(),

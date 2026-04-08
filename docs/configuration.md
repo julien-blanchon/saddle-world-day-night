@@ -14,6 +14,7 @@
 | `celestial` | `CelestialSettings` | simple arc + default moon offsets | nested config | Controls sun path, moon offset, and lunar cycle | Use `LatitudeAware` only when the day-length variation matters |
 | `lighting` | `LightingProfile` | `realistic_outdoor()` | nested config | Curves for illuminance, color, fog, and exposure | Start from a preset and then tune individual curves |
 | `managed_lights` | `ManagedLightConfig` | auto-spawn enabled | nested config | Chooses whether missing `Sun` / `Moon` lights are spawned | Disable auto-spawn if composition already owns the light entities |
+| `global_ambient` | `GlobalAmbientConfig` | ambient writes enabled | nested config | Chooses whether the crate writes `GlobalAmbientLight` | Disable it when a game owns ambient lighting separately from day/night |
 | `shadows` | `ShadowConfig` | low-angle guards enabled | nested config | Enables and gates sun/moon shadow output | Raise the sun minimum angle if dawn/dusk acne is too visible |
 | `smoothing` | `SmoothingConfig` | light continuous smoothing, jump smoothing off | nested config | Resource-space interpolation between resolved lighting states | Leave continuous smoothing on; enable jump smoothing only if scrubs look harsh |
 | `write_thresholds` | `WriteThresholds` | small epsilons | nested config | Skips writing nearly unchanged values | Increase thresholds only if diagnostics show excessive churn |
@@ -109,6 +110,12 @@ Preset constructors:
 | Field | Type | Default | Effect |
 | --- | --- | --- | --- |
 | `auto_spawn` | `bool` | `true` | Spawn missing `Sun` / `Moon` lights automatically |
+
+## `GlobalAmbientConfig`
+
+| Field | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `apply` | `bool` | `true` | Write the resolved ambient color and brightness into `GlobalAmbientLight` |
 
 ## `ShadowConfig`
 

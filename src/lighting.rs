@@ -464,7 +464,6 @@ pub fn smooth_lighting(
     delta_seconds: f32,
 ) -> DayNightLighting {
     let smoothing_seconds = match step_mode {
-        TimeStepMode::Idle => smoothing.continuous_seconds,
         TimeStepMode::Continuous => smoothing.continuous_seconds,
         TimeStepMode::Scrub if smoothing.smooth_scrubs => smoothing.jump_seconds,
         TimeStepMode::AdvanceJump => smoothing.jump_seconds,
