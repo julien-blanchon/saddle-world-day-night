@@ -19,6 +19,7 @@ struct WeatherSnapshot {
 
 pub fn list_scenarios() -> Vec<&'static str> {
     vec![
+        "smoke_launch",
         "day_night_smoke",
         "day_night_full_cycle",
         "day_night_fixed_time_scrub",
@@ -33,6 +34,7 @@ pub fn list_scenarios() -> Vec<&'static str> {
 
 pub fn scenario_by_name(name: &str) -> Option<Scenario> {
     match name {
+        "smoke_launch" => Some(smoke_launch()),
         "day_night_smoke" => Some(day_night_smoke()),
         "day_night_full_cycle" => Some(day_night_full_cycle()),
         "day_night_fixed_time_scrub" => Some(day_night_fixed_time_scrub()),
@@ -46,8 +48,16 @@ pub fn scenario_by_name(name: &str) -> Option<Scenario> {
     }
 }
 
+fn smoke_launch() -> Scenario {
+    day_night_smoke_named("smoke_launch")
+}
+
 fn day_night_smoke() -> Scenario {
-    Scenario::builder("day_night_smoke")
+    day_night_smoke_named("day_night_smoke")
+}
+
+fn day_night_smoke_named(name: &'static str) -> Scenario {
+    Scenario::builder(name)
         .description("Boot the lab, verify resources and managed entities exist, then capture a readable dawn checkpoint.")
         .then(Action::WaitUntil {
             label: "dawn checkpoint".into(),
@@ -68,7 +78,7 @@ fn day_night_smoke() -> Scenario {
             let overlay = support::overlay_text(world).expect("overlay text should exist");
             assert!(overlay.contains("Day Night Lab"));
         })))
-        .then(Action::Screenshot("day_night_smoke".into()))
+        .then(Action::Screenshot(name.into()))
         .build()
 }
 

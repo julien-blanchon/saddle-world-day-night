@@ -21,6 +21,7 @@ cargo run -p saddle-world-day-night-lab
 ## E2E
 
 ```bash
+cargo run -p saddle-world-day-night-lab --features e2e -- smoke_launch
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_smoke
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_full_cycle
 cargo run -p saddle-world-day-night-lab --features e2e -- day_night_fixed_time_scrub
