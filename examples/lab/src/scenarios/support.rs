@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use saddle_bevy_e2e::action::Action;
 
 use saddle_world_day_night::{DayNightLighting, TimeOfDay};
 
@@ -25,4 +26,23 @@ pub(super) fn lighting(world: &World) -> DayNightLighting {
         .get_resource::<DayNightLighting>()
         .cloned()
         .expect("DayNightLighting resource should exist")
+}
+
+pub(super) fn pause_and_scrub(hour: f32) -> Action {
+    Action::Custom(Box::new(move |world| {
+        {
+            let mut pane =
+                world.resource_mut::<saddle_world_day_night_example_support::DayNightDemoPane>();
+            pane.paused = true;
+            pane.time_hours = hour;
+        }
+        {
+            let mut config = world.resource_mut::<saddle_world_day_night::DayNightConfig>();
+            config.paused = true;
+            config.pending_override = None;
+        }
+        world
+            .resource_mut::<saddle_world_day_night::TimeOfDay>()
+            .set_hour(hour);
+    }))
 }
